@@ -74,10 +74,14 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "django_celery_beat",
+    # avbdev/plane patch: Prometheus metrics endpoint (/metrics)
+    "django_prometheus",
 ]
 
 # Middlewares
 MIDDLEWARE = [
+    # avbdev/plane patch: django-prometheus must be first and last middleware
+    "django_prometheus.middleware.PrometheusBeforeMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
@@ -91,6 +95,8 @@ MIDDLEWARE = [
     "plane.middleware.request_body_size.RequestBodySizeLimitMiddleware",
     "plane.middleware.logger.APITokenLogMiddleware",
     "plane.middleware.logger.RequestLoggerMiddleware",
+    # avbdev/plane patch: django-prometheus must be last middleware
+    "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
 
 # Rest Framework settings

@@ -84,10 +84,16 @@ COPY --from=installer /app/node_modules ./node_modules
 
 WORKDIR /app/apps/space
 
+# Fix ownership so the non-root node user (uid=1000) can read all files
+RUN chown -R node:node /app
+
 EXPOSE 3000
 
 RUN apk add --no-cache curl
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -fsS http://127.0.0.1:3000/spaces/ >/dev/null || exit 1
+
+# avbdev/plane patch: run as non-root node user (uid=1000)
+USER node
 
 CMD ["npx", "react-router-serve", "./build/server/index.js"]

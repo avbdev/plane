@@ -60,7 +60,13 @@ COPY --from=installer /app/apps/live/node_modules ./apps/live/node_modules
 COPY --from=installer /app/node_modules ./node_modules
 COPY --from=installer /app/apps/live/package.json ./apps/live/package.json
 
+# Fix ownership so the non-root node user (uid=1000) can read all files
+RUN chown -R node:node /app
+
 ENV TURBO_TELEMETRY_DISABLED=1
+
+# avbdev/plane patch: run as non-root node user (uid=1000)
+USER node
 
 EXPOSE 3000
 

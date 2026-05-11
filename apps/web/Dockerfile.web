@@ -80,6 +80,11 @@ FROM nginx:1.27-alpine AS production
 COPY apps/web/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY --from=installer /app/apps/web/build/client /usr/share/nginx/html
 
+# avbdev/plane patch: explicit non-root user declaration for K8s securityContext runAsNonRoot
+# nginx master process requires root to bind port 80; we use port 3000 via nginx.conf
+# Worker processes already drop to 'nginx' user automatically
+USER nginx
+
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

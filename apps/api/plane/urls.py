@@ -20,6 +20,9 @@ urlpatterns = [
     path("api/instances/", include("plane.license.urls")),
     path("api/v1/", include("plane.api.urls")),
     path("auth/", include("plane.authentication.urls")),
+    # avbdev/plane patch: Prometheus metrics endpoint — scraped by homelab Prometheus
+    # Access restricted to cluster-internal traffic via NetworkPolicy (not exposed via Ingress)
+    path("", include("django_prometheus.urls")),
     path("", include("plane.web.urls")),
 ]
 

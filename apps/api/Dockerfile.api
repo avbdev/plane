@@ -49,8 +49,13 @@ RUN apk --no-cache add "bash~=5.2"
 COPY ./bin ./bin/
 
 RUN mkdir -p /code/plane/logs
-RUN chmod +x ./bin/*
-RUN chmod -R 777 /code
+
+# Create a non-root user and fix permissions
+# avbdev/plane patch: run as non-root (uid=1000) — upstream issue pending
+RUN addgroup -S plane && adduser -S plane -G plane -u 1000
+RUN chmod +x ./bin/* && chown -R plane:plane /code
+
+USER 1000
 
 # Expose container port and run entry point script
 EXPOSE 8000

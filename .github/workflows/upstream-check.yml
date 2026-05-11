@@ -1,0 +1,134 @@
+# avbdev/plane — Upstream Release Check
+#
+# Runs weekly on Monday 09:00 UTC and can be triggered manually.
+# Compares the latest makeplane/plane release against the most recent tag on this fork.
+# Opens a GitHub Issue if a new upstream release is available.
+
+name: Upstream Release Check
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"  # Every Monday 09:00 UTC
+  workflow_dispatch:      # Allow manual trigger
+
+jobs:
+  check-upstream:
+    name: Check makeplane/plane for new releases
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for git tag
+
+      - name: Get latest upstream release
+        id: upstream
+        run: |
+          LATEST=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/makeplane/plane/releases/latest" \
+            | jq -r '.tag_name')
+          echo "version=${LATEST}" >> $GITHUB_OUTPUT
+          echo "Upstream latest: ${LATEST}"
+
+      - name: Get current fork tag
+        id: current
+        run: |
+          # Get the most recent semver tag on this fork
+          CURRENT=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "none")
+          echo "version=${CURRENT}" >> $GITHUB_OUTPUT
+          echo "Fork latest tag: ${CURRENT}"
+
+      - name: Check if upstream is ahead
+        id: compare
+        run: |
+          UPSTREAM="${{ steps.upstream.outputs.version }}"
+          CURRENT="${{ steps.current.outputs.version }}"
+          if [ "${UPSTREAM}" != "${CURRENT}" ] && [ "${UPSTREAM}" != "null" ]; then
+            echo "behind=true" >> $GITHUB_OUTPUT
+            echo "Fork (${CURRENT}) is behind upstream (${UPSTREAM})"
+          else
+            echo "behind=false" >> $GITHUB_OUTPUT
+            echo "Fork is current with upstream (${CURRENT})"
+          fi
+
+      - name: Check for existing open issue
+        if: steps.compare.outputs.behind == 'true'
+        id: existing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          UPSTREAM="${{ steps.upstream.outputs.version }}"
+          # Search for an open issue with this upstream version in the title
+          EXISTING=$(gh issue list \
+            --label "upstream-sync" \
+            --state open \
+            --search "Upstream release available: ${UPSTREAM}" \
+            --json number \
+            --jq '.[0].number // empty')
+          echo "issue_number=${EXISTING}" >> $GITHUB_OUTPUT
+
+      - name: Open upstream sync issue
+        if: steps.compare.outputs.behind == 'true' && steps.existing.outputs.issue_number == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          UPSTREAM="${{ steps.upstream.outputs.version }}"
+          CURRENT="${{ steps.current.outputs.version }}"
+
+          gh issue create \
+            --title "⬆️ Upstream release available: ${UPSTREAM}" \
+            --label "upstream-sync" \
+            --assignee "${{ github.repository_owner }}" \
+            --body "## Upstream Release Available
+
+          **makeplane/plane** has released **\`${UPSTREAM}\`**.
+          Current fork tag: **\`${CURRENT}\`**
+
+          ### Quick Links
+          - [Upstream changelog / release notes](https://github.com/makeplane/plane/releases/tag/${UPSTREAM})
+          - [Diff from ${CURRENT} to ${UPSTREAM}](https://github.com/makeplane/plane/compare/${CURRENT}...${UPSTREAM})
+          - [Patched files to check for conflicts](https://github.com/makeplane/plane/compare/${CURRENT}...${UPSTREAM}?diff=unified#files_bucket)
+
+          ### Files to Check for Conflicts
+          These files have been patched in \`avbdev/plane\` and may conflict if upstream changed them:
+
+          | File | Our patch | Conflict risk |
+          |------|-----------|---------------|
+          | \`apps/api/Dockerfile.api\` | Non-root user (USER 1000) | Low |
+          | \`apps/api/requirements/base.txt\` | django-prometheus==2.3.1 | Low |
+          | \`apps/api/plane/settings/common.py\` | django_prometheus in INSTALLED_APPS + MIDDLEWARE | Low |
+          | \`apps/api/plane/urls.py\` | django_prometheus.urls include | Low |
+
+          ### Sync Procedure
+          \`\`\`bash
+          # 1. Add upstream remote (if not already set)
+          git remote add upstream https://github.com/makeplane/plane.git
+
+          # 2. Fetch upstream tags
+          git fetch upstream --tags
+
+          # 3. Create sync branch
+          git checkout -b upstream-sync/${UPSTREAM} main
+
+          # 4. Merge the upstream tag
+          git merge upstream/${UPSTREAM} --no-ff -m \"chore: merge upstream ${UPSTREAM}\"
+
+          # 5. Verify our patches are still present
+          grep -n 'USER 1000' apps/api/Dockerfile.api
+          grep 'django-prometheus' apps/api/requirements/base.txt
+          grep 'django_prometheus' apps/api/plane/settings/common.py
+          grep 'django_prometheus' apps/api/plane/urls.py
+
+          # 6. Open PR → avbdev/plane:main
+          gh pr create --title \"chore: sync upstream ${UPSTREAM}\" --base main
+          \`\`\`
+
+          See [docs/upstream-sync.md](../blob/main/docs/upstream-sync.md) for the full procedure."
+
+      - name: Report status (no update needed)
+        if: steps.compare.outputs.behind == 'false'
+        run: echo "✅ Fork is current with upstream (${{ steps.upstream.outputs.version }}). No action needed."

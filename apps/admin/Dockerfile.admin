@@ -80,6 +80,9 @@ FROM nginx:1.29-alpine AS production
 COPY apps/admin/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY --from=installer /app/apps/admin/build/client /usr/share/nginx/html/god-mode
 
+# avbdev/plane patch: explicit non-root user declaration for K8s securityContext runAsNonRoot
+USER nginx
+
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
