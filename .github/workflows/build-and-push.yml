@@ -247,9 +247,6 @@ jobs:
     environment:
       name: production  # Requires manual approval in GitHub Environments settings
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
     steps:
       - name: Compute tag
         id: tag
