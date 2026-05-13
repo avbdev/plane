@@ -16,7 +16,7 @@ RUN apk add --no-cache libc6-compat
 # Set working directory
 WORKDIR /app
 ARG TURBO_VERSION=2.9.4
-RUN corepack enable pnpm && pnpm add -g turbo@${TURBO_VERSION}
+RUN npm install -g turbo@${TURBO_VERSION}
 COPY . .
 RUN turbo prune --scope=live --docker
 
