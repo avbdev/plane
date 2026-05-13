@@ -242,8 +242,8 @@ jobs:
   # ────────────────────────────────────────────────────────────────────────────
   promote-production:
     name: Promote to Production
-    needs: [promote-staging]
-    if: github.ref_type == 'tag'
+    needs: [scan, promote-staging]
+    if: github.ref_type == 'tag' && (needs.promote-staging.result == 'success' || needs.promote-staging.result == 'skipped')
     environment:
       name: production  # Requires manual approval in GitHub Environments settings
     runs-on: ubuntu-latest
