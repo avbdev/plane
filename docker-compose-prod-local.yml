@@ -1,0 +1,207 @@
+version: "3.8"
+
+# Runs the pre-built plane images with production-equivalent configuration
+# matching the k8s plane-production namespace (plane-app-config + plane-secrets).
+# Infrastructure (postgres, redis, rabbitmq, minio) is assumed already running
+# on the plane_dev_env network from docker-compose-local.yml.
+
+services:
+  migrator:
+    container_name: plane-migrator-prod
+    image: plane-migrator:latest
+    restart: "no"
+    networks:
+      dev_env:
+        aliases:
+          - plane-migrator
+    command: ./bin/docker-entrypoint-migrator.sh
+    environment:
+      # --- from plane-secrets ---
+      SECRET_KEY: "4b737a7d06a3b5946bcd3e74f946b46277f0b5702c35086b4102397eeae2d85344d13924437340d0970aba9702ebe9543f80"
+      DATABASE_URL: "postgresql://plane:plane@plane-plane-db-1:5432/plane"
+      POSTGRES_USER: "plane"
+      POSTGRES_PASSWORD: "plane"
+      RABBITMQ_USER: "plane"
+      RABBITMQ_PASSWORD: "plane"
+      AWS_ACCESS_KEY_ID: "access-key"
+      AWS_SECRET_ACCESS_KEY: "secret-key"
+      AWS_S3_ENDPOINT_URL: "http://plane-plane-minio-1:9000"
+      LIVE_SERVER_SECRET_KEY: "397eb5b2fa111505986ac89055178936996bc19e9de12871bc6929c5a0f46d7b"
+      # --- from plane-app-config ---
+      DEBUG: "0"
+      CORS_ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3100"
+      POSTGRES_HOST: "plane-plane-db-1"
+      POSTGRES_DB: "plane"
+      POSTGRES_PORT: "5432"
+      REDIS_HOST: "plane-plane-redis-1"
+      REDIS_PORT: "6379"
+      REDIS_URL: "redis://plane-plane-redis-1:6379/"
+      RABBITMQ_HOST: "plane-plane-mq-1"
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_VHOST: "plane"
+      AWS_REGION: ""
+      AWS_S3_BUCKET_NAME: "uploads"
+      FILE_SIZE_LIMIT: "52428800"
+      USE_MINIO: "1"
+      MINIO_ENDPOINT_SSL: "0"
+      SIGNED_URL_EXPIRATION: "3600"
+      HARD_DELETE_AFTER_DAYS: "60"
+      WEB_URL: "http://localhost:8000"
+      APP_BASE_URL: "http://localhost:3000"
+      APP_BASE_PATH: ""
+      ADMIN_BASE_URL: "http://localhost:3001"
+      ADMIN_BASE_PATH: "/god-mode"
+      SPACE_BASE_URL: "http://localhost:3002"
+      SPACE_BASE_PATH: "/spaces"
+      LIVE_BASE_URL: "http://localhost:3100"
+      LIVE_BASE_PATH: "/live"
+      GUNICORN_WORKERS: "4"
+      API_KEY_RATE_LIMIT: "60/minute"
+      DISABLE_TELEMETRY: "1"
+      DOCKERIZED: "1"
+
+  api:
+    container_name: plane-api-prod
+    image: plane-api:latest
+    restart: unless-stopped
+    networks:
+      dev_env:
+        aliases:
+          - plane-api
+    command: ./bin/docker-entrypoint-api-local.sh
+    ports:
+      - "8001:8000"
+    environment:
+      SECRET_KEY: "4b737a7d06a3b5946bcd3e74f946b46277f0b5702c35086b4102397eeae2d85344d13924437340d0970aba9702ebe9543f80"
+      DATABASE_URL: "postgresql://plane:plane@plane-plane-db-1:5432/plane"
+      POSTGRES_USER: "plane"
+      POSTGRES_PASSWORD: "plane"
+      POSTGRES_HOST: "plane-plane-db-1"
+      POSTGRES_DB: "plane"
+      POSTGRES_PORT: "5432"
+      RABBITMQ_USER: "plane"
+      RABBITMQ_PASSWORD: "plane"
+      RABBITMQ_HOST: "plane-plane-mq-1"
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_VHOST: "plane"
+      AWS_ACCESS_KEY_ID: "access-key"
+      AWS_SECRET_ACCESS_KEY: "secret-key"
+      AWS_S3_ENDPOINT_URL: "http://plane-plane-minio-1:9000"
+      AWS_S3_BUCKET_NAME: "uploads"
+      AWS_REGION: ""
+      LIVE_SERVER_SECRET_KEY: "397eb5b2fa111505986ac89055178936996bc19e9de12871bc6929c5a0f46d7b"
+      DEBUG: "0"
+      CORS_ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3100"
+      REDIS_HOST: "plane-plane-redis-1"
+      REDIS_PORT: "6379"
+      REDIS_URL: "redis://plane-plane-redis-1:6379/"
+      FILE_SIZE_LIMIT: "52428800"
+      USE_MINIO: "1"
+      MINIO_ENDPOINT_SSL: "0"
+      SIGNED_URL_EXPIRATION: "3600"
+      HARD_DELETE_AFTER_DAYS: "60"
+      WEB_URL: "http://localhost:8000"
+      APP_BASE_URL: "http://localhost:3000"
+      APP_BASE_PATH: ""
+      ADMIN_BASE_URL: "http://localhost:3001"
+      ADMIN_BASE_PATH: "/god-mode"
+      SPACE_BASE_URL: "http://localhost:3002"
+      SPACE_BASE_PATH: "/spaces"
+      LIVE_BASE_URL: "http://localhost:3100"
+      LIVE_BASE_PATH: "/live"
+      GUNICORN_WORKERS: "4"
+      API_KEY_RATE_LIMIT: "60/minute"
+      DISABLE_TELEMETRY: "1"
+      DOCKERIZED: "1"
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+
+  worker:
+    container_name: plane-worker-prod
+    image: plane-worker:latest
+    restart: unless-stopped
+    networks:
+      - dev_env
+    command: ./bin/docker-entrypoint-worker.sh
+    environment:
+      SECRET_KEY: "4b737a7d06a3b5946bcd3e74f946b46277f0b5702c35086b4102397eeae2d85344d13924437340d0970aba9702ebe9543f80"
+      DATABASE_URL: "postgresql://plane:plane@plane-plane-db-1:5432/plane"
+      POSTGRES_USER: "plane"
+      POSTGRES_PASSWORD: "plane"
+      POSTGRES_HOST: "plane-plane-db-1"
+      POSTGRES_DB: "plane"
+      POSTGRES_PORT: "5432"
+      RABBITMQ_USER: "plane"
+      RABBITMQ_PASSWORD: "plane"
+      RABBITMQ_HOST: "plane-plane-mq-1"
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_VHOST: "plane"
+      AWS_ACCESS_KEY_ID: "access-key"
+      AWS_SECRET_ACCESS_KEY: "secret-key"
+      AWS_S3_ENDPOINT_URL: "http://plane-plane-minio-1:9000"
+      AWS_S3_BUCKET_NAME: "uploads"
+      AWS_REGION: ""
+      LIVE_SERVER_SECRET_KEY: "397eb5b2fa111505986ac89055178936996bc19e9de12871bc6929c5a0f46d7b"
+      DEBUG: "0"
+      REDIS_HOST: "plane-plane-redis-1"
+      REDIS_PORT: "6379"
+      REDIS_URL: "redis://plane-plane-redis-1:6379/"
+      FILE_SIZE_LIMIT: "52428800"
+      USE_MINIO: "1"
+      MINIO_ENDPOINT_SSL: "0"
+      HARD_DELETE_AFTER_DAYS: "60"
+      WEB_URL: "http://localhost:8000"
+      APP_BASE_URL: "http://localhost:3000"
+      APP_BASE_PATH: ""
+      DISABLE_TELEMETRY: "1"
+      DOCKERIZED: "1"
+    depends_on:
+      - api
+
+  beat-worker:
+    container_name: plane-beat-worker-prod
+    image: plane-beat-worker:latest
+    restart: unless-stopped
+    networks:
+      - dev_env
+    command: ./bin/docker-entrypoint-beat.sh
+    environment:
+      SECRET_KEY: "4b737a7d06a3b5946bcd3e74f946b46277f0b5702c35086b4102397eeae2d85344d13924437340d0970aba9702ebe9543f80"
+      DATABASE_URL: "postgresql://plane:plane@plane-plane-db-1:5432/plane"
+      POSTGRES_USER: "plane"
+      POSTGRES_PASSWORD: "plane"
+      POSTGRES_HOST: "plane-plane-db-1"
+      POSTGRES_DB: "plane"
+      POSTGRES_PORT: "5432"
+      RABBITMQ_USER: "plane"
+      RABBITMQ_PASSWORD: "plane"
+      RABBITMQ_HOST: "plane-plane-mq-1"
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_VHOST: "plane"
+      AWS_ACCESS_KEY_ID: "access-key"
+      AWS_SECRET_ACCESS_KEY: "secret-key"
+      AWS_S3_ENDPOINT_URL: "http://plane-plane-minio-1:9000"
+      AWS_S3_BUCKET_NAME: "uploads"
+      AWS_REGION: ""
+      LIVE_SERVER_SECRET_KEY: "397eb5b2fa111505986ac89055178936996bc19e9de12871bc6929c5a0f46d7b"
+      DEBUG: "0"
+      REDIS_HOST: "plane-plane-redis-1"
+      REDIS_PORT: "6379"
+      REDIS_URL: "redis://plane-plane-redis-1:6379/"
+      FILE_SIZE_LIMIT: "52428800"
+      USE_MINIO: "1"
+      MINIO_ENDPOINT_SSL: "0"
+      HARD_DELETE_AFTER_DAYS: "60"
+      WEB_URL: "http://localhost:8000"
+      APP_BASE_URL: "http://localhost:3000"
+      APP_BASE_PATH: ""
+      DISABLE_TELEMETRY: "1"
+      DOCKERIZED: "1"
+    depends_on:
+      - api
+
+networks:
+  dev_env:
+    external: true
+    name: plane_dev_env
